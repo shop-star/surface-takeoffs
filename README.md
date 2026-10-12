@@ -1,38 +1,34 @@
 # Surface Takeoff
 
-Two things live in this repo:
-
-1. **A standalone browser app** (`app/`) — open a PDF plan (or a zip
-   containing one), click two points on a known measurement to calibrate
-   the scale, then trace each outline. Close a tracing as an **area** (its
-   m²) or leave it open and **measure its length** (its m) instead — both
-   kinds show up together in the results, with a running total for each.
-   Results update live, you can copy them straight into a spreadsheet or
-   quote, and download an annotated copy of the PDF with the tracings
-   burned onto the pages and the underlying data embedded in the file
-   itself (so reopening that downloaded copy restores your exact progress —
-   no account or server involved).
-2. **A minimal Outlook add-in** (`manifest.xml`, `commands.html`,
-   `commands.js`) — adds a "Surface Takeoff" button to the ribbon when
-   you're reading an email. Clicking it opens the app above in a real
-   browser window, with the open email's subject, PDF/zip attachment names,
-   and any links found in its body carried over so you have a head start.
+A standalone browser app: open a PDF plan (or a zip containing one), click
+two points on a known measurement to calibrate the scale, then trace each
+outline. Close a tracing as an **area** (its m²) or leave it open and
+**measure its length** (its m) instead — both kinds show up together in the
+results, with a running total for each. Results update live, you can copy
+them straight into a spreadsheet or quote, and download an annotated copy of
+the PDF with the tracings burned onto the pages and the underlying data
+embedded in the file itself (so reopening that downloaded copy restores your
+exact progress — no account or server involved).
 
 Everything runs in your browser — a PDF is never uploaded anywhere. There's
 no subscription, no per-use cost, and no account to sign up for.
 
-## Why it's split this way
+Hosted at **https://shop-star.github.io/surface-takeoffs/** (GitHub Pages,
+deployed by `.github/workflows/deploy-pages.yml` on every push to `main`).
 
-Outlook add-ins run inside an embedded browser control, and that embedded
-control turned out to never reliably support triggering a file download —
-several different approaches were tried and each failed identically (or
-couldn't be confirmed working) across real Outlook clients. Doing the
-actual plan viewing/tracing/export in an ordinary browser tab sidesteps
-that entirely: downloads, drag-and-drop, and file pickers all just work.
-The add-in's only job now is to hand off to that tab with a head start —
-see `Office.context.ui.openBrowserWindow` in `commands.js`, an API
-Microsoft ships specifically for "things the sandboxed add-in view can't
-do, like downloading a file."
+## Opening it from Outlook
+
+The Outlook add-in in
+[shop-star/falcon-outlook-addin](https://github.com/shop-star/falcon-outlook-addin)
+adds a **Surface Takeoff** ribbon button. It opens this app in a real
+browser window with the email's subject, PDF/zip attachment names, and any
+links in its body passed as `?subject=…&attachment=…&link=…` query
+parameters, which the app shows in its "From your email" panel. If this
+app's URL ever changes, update `APP_URL` in that repo's `commands.js`.
+
+(The app used to live in that repo; it moved here so the add-in repo can
+hold just the add-in. Outlook's embedded browser can't reliably download
+files, which is why the app runs in an ordinary browser tab at all.)
 
 ## Using the app on its own
 
@@ -57,58 +53,11 @@ Set the scale on an image by **measuring a known dimension**. A typed
 scale like `1:100` only works if the image records its real scan
 resolution (e.g. a 300 DPI scan). The app tells you when it doesn't.
 
-## What you need to host the add-in
-
-- A Microsoft 365 work/school account.
-- Somewhere to host static files over HTTPS. **GitHub Pages** is the
-  easiest free option and is what's deployed here (see
-  `.github/workflows/deploy-pages.yml`), but any static HTTPS host works.
-
-## 1. Host the files
-
-The GitHub Actions workflow in this repo deploys everything needed —
-`manifest.xml`, `commands.html`, `commands.js`, `assets/`, `vendor/`, and
-the whole `app/` folder — to GitHub Pages on every push to `main`. If
-you're forking this for your own deployment, update every
-`https://shop-star.github.io/falcon-outlook-addin` URL in `manifest.xml`
-and `commands.js` (`APP_URL`) to your own base URL first.
-
-## 2. Sideload the add-in into Outlook (work/school account)
-
-**Outlook on the web** (works.outlook.com / outlook.office.com):
-
-1. Open any email, then in the ribbon go to **Get Add-ins** (or the "..."
-   menu → **Get Add-ins**).
-2. Choose **My add-ins** (left side), scroll to **Custom Addins**, and
-   click **Add a custom add-in → Add from file...**
-3. Select `manifest.xml`. Accept the warning about unverified/custom
-   add-ins.
-
-**New Outlook for Windows / Outlook on Mac:** same steps — **Get Add-ins**
-→ **My add-ins** → **Add a custom add-in** → **Add from file**.
-
-**Classic Outlook for Windows:** **File → Manage Add-ins** opens the same
-web dialog above, or use **Home → Get Add-ins → My add-ins**.
-
-Once added, open any email and you'll see a **Surface Takeoff** button in
-the ribbon.
-
-> **Note:** some organizations restrict end-users from sideloading custom
-> add-ins (a tenant admin setting). If "Add from file" is missing or
-> blocked, your Microsoft 365 admin can either enable it for you or install
-> the manifest for you centrally via the Microsoft 365 admin center
-> (Settings → Integrated apps → Upload custom apps).
->
-> Also note: opening a real browser window from the add-in
-> (`OpenBrowserWindowApi`) needs a reasonably current Outlook build. If your
-> client is too old, clicking the ribbon button shows an error banner
-> instead — open the app's URL directly in your browser as a fallback.
-
 ## Using it
 
-1. Open the email with the plan attached, click **Surface Takeoff** in the
-   ribbon — the app opens in a new browser tab, pre-filled with that
-   email's subject, attachment names, and any links found in the body.
+1. Open the app — directly, or from an email via the **Surface Takeoff**
+   button in Outlook, which pre-fills that email's subject, attachment
+   names, and any links found in the body.
 2. Save the PDF attachment from Outlook's own UI (or download it from one
    of the listed links), then drag it into the app (or a zip containing
    it). Once a plan is open, section 1 shrinks down to its file name, a
@@ -200,5 +149,3 @@ part), so use it when you actually want to start over.
   and drop it into the app. There's no built-in Dropbox/OneDrive picker
   (yet); links are just shown for a one-click open in your own browser,
   where your existing login to that service applies normally.
-- If your organization has disabled add-in sideloading, you'll need your
-  Microsoft 365 admin to deploy the manifest centrally (see note above).
