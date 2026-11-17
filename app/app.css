@@ -28,15 +28,20 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
    Three columns: the numbered sections narrowed into their own column on
    the left, the PDF viewer (unnumbered — just the plan itself; its
    controls live in section 3) filling the middle, and the results pane
-   on the right. The results pane starts minimised to a slim strip so the
-   viewer gets the room; it opens when a tracing is finished (or when the
-   strip is clicked) and minimises again when a new trace starts.
+   on the right. The right-hand column is only a slim strip: the results
+   pane slides out from it over the right of the plan (the plan never
+   narrows). It opens by itself when a tracing is finished (and slides
+   away on the next click outside it), or stays open from a click on the
+   strip until "Hide" is clicked.
    (There used to be a "Stacked" option that put the
    sections and viewer in one column; it was removed.) */
 :root {
   --results-width: 440px;
   --sections-width: 260px;
   --results-collapsed-width: 40px;
+  /* Height of the viewer (and the most the slid-out results pane takes):
+     down to the bottom of the window. */
+  --viewer-height: calc(100vh - 120px);
 }
 @media (max-width: 1200px) {
   :root {
@@ -45,9 +50,9 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
   }
 }
 #mainLayout {
+  position: relative;
   display: grid;
-  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-width);
-  transition: grid-template-columns 0.2s ease;
+  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-collapsed-width);
   /* The trailing 1fr row soaks up any extra height from the items that
      span every row (the viewer and results pane), instead of it being
      shared out as gaps between the sections. */
@@ -61,35 +66,16 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
 #mainLayout #downloadSection { grid-column: 1; grid-row: 4; }
 #mainLayout #viewerSection { grid-column: 2; grid-row: 1 / span 5; }
 #mainLayout #resultsPane { grid-column: 3; grid-row: 1 / span 5; }
-/* Belt and braces: if the results table is ever wider than its column
-   (very long scale labels, say), it scrolls inside the pane rather than
-   hanging off the right of the screen. */
-#resultsPane { min-width: 0; overflow-x: auto; }
-/* In the column layout the viewer runs down to the bottom of the window
-   rather than stopping at 60% of its height. */
-#mainLayout .canvas-scroller { height: calc(100vh - 120px); }
-#mainLayout.results-collapsed {
-  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-collapsed-width);
-}
+#mainLayout .canvas-scroller { height: var(--viewer-height); }
 
-/* Minimise / restore for the results pane. */
-.results-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.results-header h2 { margin: 0; }
-.results-collapse-btn { padding: 3px 8px; font-size: 12px; }
-.results-expand-btn { display: none; }
-#mainLayout.results-collapsed #resultsPane {
+/* The strip itself. */
+#resultsPane {
+  min-width: 0;
   padding: 0;
-  overflow: hidden;
+  border: none;
   align-self: stretch;
 }
-#mainLayout.results-collapsed .results-content { display: none; }
-#mainLayout.results-collapsed .results-expand-btn {
+.results-expand-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -98,13 +84,13 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
   height: 100%;
   min-height: 200px;
   padding: 10px 0;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-muted);
   color: var(--brand-dark);
   font-weight: 600;
 }
-#mainLayout.results-collapsed .results-expand-btn:hover { background: #e6eeec; }
+.results-expand-btn:hover { background: #e6eeec; }
 .results-expand-label {
   writing-mode: vertical-rl;
   display: flex;
@@ -122,6 +108,45 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
   font-size: 11px;
   text-align: center;
 }
+
+/* The pane, sliding out over the right of the plan (positioned against
+   #mainLayout, so it covers the strip and the viewer's right edge). It
+   scrolls inside itself once it has more rows than fit. */
+.results-content {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  width: var(--results-width);
+  max-width: 100%;
+  max-height: var(--viewer-height);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: -6px 6px 24px rgba(0, 0, 0, 0.16);
+  /* Visible straight away when opening (so the new tracing's name field
+     can take focus), hidden only once the slide-away has finished. */
+  transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s;
+}
+/* Slid away: only 16px, so it stays inside the page's own padding and
+   never adds a horizontal scrollbar. */
+#mainLayout.results-collapsed .results-content {
+  transform: translateX(16px);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.results-header h2 { margin: 0; }
+.results-collapse-btn { padding: 3px 8px; font-size: 12px; }
 
 /* Page navigation and zoom sit in section 1, under the open file's name. */
 .view-controls { margin: 10px 0 0; }
@@ -142,6 +167,17 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
     display: block;
   }
   #mainLayout .canvas-scroller { height: 60vh; }
+  /* Stacked (an upright tablet): the pane sits in the page flow at the
+     bottom rather than sliding over anything, with a bar to open it. */
+  .results-content {
+    position: static;
+    width: auto;
+    max-height: none;
+    box-shadow: none;
+    transition: none;
+  }
+  #mainLayout.results-collapsed .results-content { display: none; }
+  #mainLayout:not(.results-collapsed) .results-expand-btn { display: none; }
   #mainLayout #intakeSection,
   #mainLayout #scaleSection,
   #mainLayout #toolsSection,
@@ -151,12 +187,12 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
     grid-column: auto;
     grid-row: auto;
   }
-  #mainLayout.results-collapsed .results-expand-btn {
+  .results-expand-btn {
     flex-direction: row;
     justify-content: center;
     min-height: 0;
   }
-  #mainLayout.results-collapsed .results-expand-btn > span:first-child { transform: rotate(-90deg); }
+  .results-expand-btn > span:first-child { transform: rotate(-90deg); }
   .results-expand-label { writing-mode: horizontal-tb; }
 }
 
