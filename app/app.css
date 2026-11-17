@@ -24,25 +24,12 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
 .app-header { margin-bottom: 12px; }
 .subtitle { margin: 0 0 8px; color: var(--text-muted); font-size: 13px; }
 
-.layout-toggle { display: flex; align-items: center; gap: 6px; }
-.layout-btn { font-size: 12px; padding: 4px 10px; }
-.layout-btn.active,
-.layout-btn.active:hover {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
-}
-
 /* ---- Main layout ----------------------------------------------------
-   The results pane is always a persistent column on the right, in both
-   layout modes — it's not part of the numbered 1-4 workflow, so it never
-   moves, and its width comes from one variable both modes share so it's
-   exactly the same size in either. The PDF viewer is unnumbered — just the
-   plan itself; its controls live in section 3. What the "Stacked" /
-   "Columns" toggle controls is only how the rest arranges itself: fully
-   stacked in one column (with the viewer right under section 3), or with
-   the numbered sections narrowed into their own column so the viewer gets
-   the full middle width. */
+   Three columns: the numbered sections narrowed into their own column on
+   the left, the PDF viewer (unnumbered — just the plan itself; its
+   controls live in section 3) filling the middle, and the results pane
+   on the right. (There used to be a "Stacked" option that put the
+   sections and viewer in one column; it was removed.) */
 :root {
   --results-width: 440px;
   --sections-width: 260px;
@@ -55,44 +42,33 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
 }
 #mainLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--results-width);
+  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-width);
   /* The trailing 1fr row soaks up any extra height from the items that
-     span every row (the results pane here, the viewer too in Columns),
-     instead of it being shared out as gaps between the sections. */
-  grid-template-rows: repeat(5, auto) 1fr;
+     span every row (the viewer and results pane), instead of it being
+     shared out as gaps between the sections. */
+  grid-template-rows: repeat(4, auto) 1fr;
   align-items: start;
   gap: 14px;
 }
 #mainLayout #intakeSection { grid-column: 1; grid-row: 1; }
 #mainLayout #scaleSection { grid-column: 1; grid-row: 2; }
 #mainLayout #toolsSection { grid-column: 1; grid-row: 3; }
-#mainLayout #viewerSection { grid-column: 1; grid-row: 4; }
-#mainLayout #downloadSection { grid-column: 1; grid-row: 5; }
-#mainLayout #resultsPane { grid-column: 2; grid-row: 1 / span 6; }
+#mainLayout #downloadSection { grid-column: 1; grid-row: 4; }
+#mainLayout #viewerSection { grid-column: 2; grid-row: 1 / span 5; }
+#mainLayout #resultsPane { grid-column: 3; grid-row: 1 / span 5; }
 /* Belt and braces: if the results table is ever wider than its column
    (very long scale labels, say), it scrolls inside the pane rather than
    hanging off the right of the screen. */
 #resultsPane { min-width: 0; overflow-x: auto; }
 
-#mainLayout.layout-sidebar {
-  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-width);
-  grid-template-rows: repeat(4, auto) 1fr;
-}
-#mainLayout.layout-sidebar #intakeSection { grid-column: 1; grid-row: 1; }
-#mainLayout.layout-sidebar #scaleSection { grid-column: 1; grid-row: 2; }
-#mainLayout.layout-sidebar #toolsSection { grid-column: 1; grid-row: 3; }
-#mainLayout.layout-sidebar #downloadSection { grid-column: 1; grid-row: 4; }
-#mainLayout.layout-sidebar #viewerSection { grid-column: 2; grid-row: 1 / span 5; }
-#mainLayout.layout-sidebar #resultsPane { grid-column: 3; grid-row: 1 / span 5; }
-
 /* Page navigation and zoom sit in section 1, under the open file's name. */
 .view-controls { margin: 10px 0 0; }
 .view-controls[hidden] { display: none; }
 
-/* In the narrow Columns-mode column, "Go to page" drops onto its own line
+/* In the narrow left-hand column, "Go to page" drops onto its own line
    inside the page-navigation group's border instead of overflowing it. */
-.layout-sidebar .view-controls .toolbar-group-bordered { flex-wrap: wrap; }
-.layout-sidebar .view-controls .page-jump {
+.view-controls .toolbar-group-bordered { flex-wrap: wrap; }
+.view-controls .page-jump {
   flex-basis: 100%;
   padding: 6px 0 0;
   border-left: none;
@@ -100,8 +76,7 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
 }
 
 @media (max-width: 900px) {
-  #mainLayout,
-  #mainLayout.layout-sidebar {
+  #mainLayout {
     display: block;
   }
   #mainLayout #intakeSection,
@@ -109,13 +84,7 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
   #mainLayout #toolsSection,
   #mainLayout #viewerSection,
   #mainLayout #downloadSection,
-  #mainLayout #resultsPane,
-  #mainLayout.layout-sidebar #intakeSection,
-  #mainLayout.layout-sidebar #scaleSection,
-  #mainLayout.layout-sidebar #toolsSection,
-  #mainLayout.layout-sidebar #viewerSection,
-  #mainLayout.layout-sidebar #downloadSection,
-  #mainLayout.layout-sidebar #resultsPane {
+  #mainLayout #resultsPane {
     grid-column: auto;
     grid-row: auto;
   }

@@ -128,9 +128,6 @@ let labelDragState = null; // { tracingId, dragged }
 // ---- DOM refs ----------------------------------------------------------
 const statusBarEl = document.getElementById("statusBar");
 
-const mainLayoutEl = document.getElementById("mainLayout");
-const layoutStackedBtn = document.getElementById("layoutStackedBtn");
-const layoutSidebarBtn = document.getElementById("layoutSidebarBtn");
 
 const intakeSectionEl = document.getElementById("intakeSection");
 const dropZone = document.getElementById("dropZone");
@@ -354,37 +351,6 @@ loadPersistedFile()
     openPdfFromBytes(entry.fileName, bytes);
   })
   .catch(() => {});
-
-// ---- Layout toggle: stacked (default) vs. "Columns" (1, 2 & 4 narrowed) ---
-const LAYOUT_STORAGE_KEY = "floorAreaTakeoff:layout";
-
-function applyLayout(layout) {
-  mainLayoutEl.classList.toggle("layout-sidebar", layout === "sidebar");
-  layoutStackedBtn.classList.toggle("active", layout !== "sidebar");
-  layoutSidebarBtn.classList.toggle("active", layout === "sidebar");
-}
-
-function setLayout(layout) {
-  applyLayout(layout);
-  try {
-    localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
-  } catch (e) {
-    // Storage unavailable — the choice just won't persist past this session.
-  }
-}
-
-layoutStackedBtn.addEventListener("click", () => setLayout("stacked"));
-layoutSidebarBtn.addEventListener("click", () => setLayout("sidebar"));
-
-(function initLayout() {
-  let saved = null;
-  try {
-    saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
-  } catch (e) {
-    // Ignore — falls back to the default below.
-  }
-  applyLayout(saved === "sidebar" ? "sidebar" : "stacked");
-})();
 
 // ---- 1. File intake: drag-and-drop, file picker, and zip extraction -------
 ["dragenter", "dragover"].forEach((evtName) =>

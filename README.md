@@ -114,12 +114,9 @@ resolution (e.g. a 300 DPI scan). The app tells you when it doesn't.
    append a summary page listing every tracing and its measurement (on by
    default), then click **Download**.
 
-If the numbered steps feel cramped stacked on top of each other, the
-**Layout** control at the top of the page switches to putting all four
-numbered sections in a narrow column on the left, with the plan
-itself filling the middle — the **Takeoff results** pane always stays on
-the right, at the same width, in either case. Pick
-whichever suits your screen; it's remembered next time you open the app.
+The page is laid out in three columns: the four numbered sections in a
+narrow column on the left, the plan itself filling the middle, and the
+**Takeoff results** pane on the right.
 
 Your scale and tracings are saved automatically as you work, to your
 browser's local storage for that exact file (by name and size), and the
