@@ -173,7 +173,6 @@ const traceBtn = document.getElementById("traceBtn");
 const undoPointBtn = document.getElementById("undoPointBtn");
 const finishAreaBtn = document.getElementById("finishAreaBtn");
 const measureLengthBtn = document.getElementById("measureLengthBtn");
-const cancelTraceBtn = document.getElementById("cancelTraceBtn");
 
 const scaleRatioForm = document.getElementById("scaleRatioForm");
 const scaleRatioInput = document.getElementById("scaleRatioInput");
@@ -1315,7 +1314,7 @@ function resetToolState() {
   finishAreaBtn.hidden = true;
   measureLengthBtn.hidden = true;
   cancelScaleBtn.hidden = true;
-  cancelTraceBtn.hidden = true;
+  traceBtn.textContent = "Trace";
 }
 
 overlayCanvas.addEventListener("click", (evt) => {
@@ -1568,7 +1567,12 @@ setScaleBtn.addEventListener("click", () => {
   );
 });
 
+// While tracing, the Trace button becomes Cancel.
 traceBtn.addEventListener("click", () => {
+  if (mode === "trace") {
+    cancelCurrentAction();
+    return;
+  }
   resetToolState();
   mode = "trace";
   traceTemp = { page: currentPageNum, points: [] };
@@ -1577,7 +1581,7 @@ traceBtn.addEventListener("click", () => {
   finishAreaBtn.disabled = true;
   measureLengthBtn.hidden = false;
   measureLengthBtn.disabled = true;
-  cancelTraceBtn.hidden = false;
+  traceBtn.textContent = "Cancel";
   setStatus(
     "Click each point of the outline in order, then click “Finish area” to close it as an area, or “Measure length” to just measure the lines drawn so far."
   );
@@ -1596,7 +1600,6 @@ function cancelCurrentAction() {
   redrawOverlay();
 }
 cancelScaleBtn.addEventListener("click", cancelCurrentAction);
-cancelTraceBtn.addEventListener("click", cancelCurrentAction);
 
 // A printed scale like "1:100" means 1 PDF point on the page (1/72 inch)
 // represents 100 times that in real life — this only holds if the PDF's
