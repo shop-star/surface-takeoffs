@@ -1314,7 +1314,7 @@ function resetToolState() {
   finishAreaBtn.hidden = true;
   measureLengthBtn.hidden = true;
   cancelScaleBtn.hidden = true;
-  traceBtn.textContent = "Trace";
+  traceBtn.textContent = "New";
 }
 
 overlayCanvas.addEventListener("click", (evt) => {
@@ -1632,7 +1632,7 @@ function applyScaleRatio(n) {
   redrawOverlay();
   recalcAllMeasurementsForPage(currentPageNum);
   saveAutosave();
-  setStatus(`Scale set to 1:${n} for this page. Click “Trace” to start your first tracing.`);
+  setStatus(`Scale set to 1:${n} for this page. Click “New” to start your first tracing.`);
 }
 
 scaleRatioConfirmBtn.addEventListener("click", () => {
@@ -1673,7 +1673,7 @@ calibConfirmBtn.addEventListener("click", () => {
   redrawOverlay();
   recalcAllMeasurementsForPage(currentPageNum);
   saveAutosave();
-  setStatus("Scale set for this page. Click “Trace” to start your first tracing.");
+  setStatus("Scale set for this page. Click “New” to start your first tracing.");
 });
 
 calibCancelBtn.addEventListener("click", () => {
