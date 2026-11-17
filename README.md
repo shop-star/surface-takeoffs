@@ -74,7 +74,7 @@ resolution (e.g. a 300 DPI scan). The app tells you when it doesn't.
    page size matches the real sheet size (i.e. it wasn't resized on
    export); if measurements come out wrong, use the click-and-measure
    method instead.
-4. In **Add tracings**, click **Trace**, then click around an outline
+4. In **Add tracings**, click **New**, then click around an outline
    point by point. When you're done, either:
    - Click **Finish area** (needs at least 3 points) to close it as an
      area — its m² is computed from the enclosed shape, or
