@@ -941,6 +941,7 @@ function redrawOverlay() {
       drawPolygon(tracing.points, color, label, isEditing ? 3 : 2, tracing.labelPos);
     }
     if (isEditing) {
+      tracingSegments(tracing).forEach(({ mid }) => drawMidpointHandle(mid, color));
       tracing.points.forEach((pt) => drawHandle(pt, color));
       drawLabelHandle(tracing.labelPos || polygonCentroid(tracing.points), color);
     }
@@ -984,6 +985,27 @@ function drawHandle(p, color) {
   overlayCtx.strokeStyle = color;
   overlayCtx.lineWidth = 2;
   overlayCtx.strokeRect(cx - size / 2, cy - size / 2, size, size);
+}
+
+// A small "+" in a circle at the middle of each of a selected tracing's
+// segments: click (or drag) it to add a new point there.
+function drawMidpointHandle(p, color) {
+  const [cx, cy] = toCanvas(p);
+  const r = 5;
+  overlayCtx.beginPath();
+  overlayCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  overlayCtx.fillStyle = "#ffffff";
+  overlayCtx.fill();
+  overlayCtx.strokeStyle = color;
+  overlayCtx.lineWidth = 1;
+  overlayCtx.stroke();
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(cx - 3, cy);
+  overlayCtx.lineTo(cx + 3, cy);
+  overlayCtx.moveTo(cx, cy - 3);
+  overlayCtx.lineTo(cx, cy + 3);
+  overlayCtx.lineWidth = 1.5;
+  overlayCtx.stroke();
 }
 
 // A hollow circle rather than drawHandle's square, so a selected tracing's
@@ -1231,6 +1253,39 @@ function hitTestVertex(tracing, p) {
   return -1;
 }
 
+// Each straight segment of a tracing, with the index a point inserted at its
+// middle would take. An area's closing segment (last point back to the
+// first) counts too; an open length line has no closing segment.
+// The "+" normally sits halfway along, but where that would land on the
+// label's drag circle (e.g. the middle of a straight two-point line, where
+// the label sits by default) it moves a quarter of the way along instead,
+// so both stay grabbable.
+function tracingSegments(tracing) {
+  const pts = tracing.points;
+  const count = tracing.kind === "length" ? pts.length - 1 : pts.length;
+  const labelAnchor = tracing.labelPos || polygonCentroid(pts);
+  const clearance = (LABEL_HIT_RADIUS_PX + MIDPOINT_HIT_RADIUS_PX) / renderScale;
+  const along = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const segments = [];
+  for (let i = 0; i < count; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    let mid = along(a, b, 0.5);
+    if (distance(mid, labelAnchor) < clearance) mid = along(a, b, 0.25);
+    segments.push({ insertAt: i + 1, mid });
+  }
+  return segments;
+}
+
+const MIDPOINT_HIT_RADIUS_PX = 8;
+
+// Returns the index to insert a new point at, or -1.
+function hitTestMidpoint(tracing, p) {
+  const thresholdPageUnits = MIDPOINT_HIT_RADIUS_PX / renderScale;
+  const hit = tracingSegments(tracing).find(({ mid }) => distance(mid, p) <= thresholdPageUnits);
+  return hit ? hit.insertAt : -1;
+}
+
 // A bit more forgiving than a vertex's, since the label handle sits over
 // actual text rather than a single point.
 const LABEL_HIT_RADIUS_PX = 14;
@@ -1315,7 +1370,7 @@ overlayCanvas.addEventListener("click", (evt) => {
     redrawOverlay();
     setStatus(
       hit
-        ? `Editing "${hit.name}" — drag its point handles to reshape it, or the circle on its label to move it.`
+        ? `Editing "${hit.name}" — drag its point handles to reshape it, click a + between two points to add a new point there, or drag the circle on its label to move it.`
         : ""
     );
   }
@@ -1343,6 +1398,15 @@ overlayCanvas.addEventListener("mousedown", (evt) => {
       const idx = hitTestVertex(tracing, p);
       if (idx !== -1) {
         vertexDragState = { tracingId: tracing.id, pointIndex: idx, dragged: false };
+        return;
+      }
+      // A "+" handle: the new point goes in straight away (so a plain click
+      // adds it), then follows the mouse like any other point if dragged.
+      const insertAt = hitTestMidpoint(tracing, p);
+      if (insertAt !== -1) {
+        tracing.points.splice(insertAt, 0, p);
+        vertexDragState = { tracingId: tracing.id, pointIndex: insertAt, dragged: false, inserted: true };
+        redrawOverlay();
         return;
       }
     }
@@ -1404,8 +1468,11 @@ window.addEventListener("mouseup", () => {
   }
 
   if (vertexDragState) {
-    if (vertexDragState.dragged) {
+    if (vertexDragState.dragged || vertexDragState.inserted) {
       recalcAllMeasurementsForPage(currentPageNum);
+      saveAutosave();
+      // Without this, the click that ends the gesture would fall through to
+      // selecting whatever's under it (and could deselect this tracing).
       suppressNextClick = true;
     }
     vertexDragState = null;
