@@ -1370,7 +1370,7 @@ overlayCanvas.addEventListener("click", (evt) => {
     redrawOverlay();
     setStatus(
       hit
-        ? `Editing "${hit.name}" — drag its point handles to reshape it, click a + between two points to add a new point there, or drag the circle on its label to move it.`
+        ? `Editing "${hit.name}" — drag its point handles to reshape it, click a + between two points to add a new point there, double-click (or right-click) a point to remove it, or drag the circle on its label to move it.`
         : ""
     );
   }
@@ -1383,8 +1383,46 @@ overlayCanvas.addEventListener("click", (evt) => {
 let panState = null;
 let suppressNextClick = false;
 
+// Removes one of a tracing's points, keeping at least the minimum a
+// tracing needs (3 for an area, 2 for a line).
+function removeTracingPoint(tracing, pointIndex) {
+  const min = tracing.kind === "length" ? 2 : 3;
+  if (tracing.points.length <= min) {
+    setStatus(
+      tracing.kind === "length"
+        ? "A line needs at least 2 points — delete the tracing from the results pane instead."
+        : "An area needs at least 3 points — delete the tracing from the results pane instead.",
+      true
+    );
+    return;
+  }
+  tracing.points.splice(pointIndex, 1);
+  recalcAllMeasurementsForPage(currentPageNum);
+  saveAutosave();
+  redrawOverlay();
+  setStatus(`Removed a point from "${tracing.name}".`);
+}
+
+function editingTracingObject() {
+  if (mode !== "idle" || !editingTracing) return null;
+  return currentGeometry().tracings.find((t) => t.id === editingTracing) || null;
+}
+
+// Right-clicking a selected tracing's point removes it (instead of the
+// browser's menu). Anywhere else, the normal menu still appears.
+overlayCanvas.addEventListener("contextmenu", (evt) => {
+  const tracing = editingTracingObject();
+  if (!tracing) return;
+  const idx = hitTestVertex(tracing, canvasPointFromEvent(evt));
+  if (idx === -1) return;
+  evt.preventDefault();
+  removeTracingPoint(tracing, idx);
+});
+
 overlayCanvas.addEventListener("mousedown", (evt) => {
-  if (mode === "idle" && editingTracing) {
+  // Only the left button grabs handles; a right-click on a point is the
+  // "remove" gesture above.
+  if (mode === "idle" && editingTracing && evt.button === 0) {
     const geo = currentGeometry();
     const tracing = geo.tracings.find((t) => t.id === editingTracing);
     if (tracing) {
@@ -1396,6 +1434,12 @@ overlayCanvas.addEventListener("mousedown", (evt) => {
         return;
       }
       const idx = hitTestVertex(tracing, p);
+      // The second press of a double-click on a point removes it.
+      if (idx !== -1 && evt.detail >= 2) {
+        removeTracingPoint(tracing, idx);
+        suppressNextClick = true;
+        return;
+      }
       if (idx !== -1) {
         vertexDragState = { tracingId: tracing.id, pointIndex: idx, dragged: false };
         return;
@@ -1471,10 +1515,12 @@ window.addEventListener("mouseup", () => {
     if (vertexDragState.dragged || vertexDragState.inserted) {
       recalcAllMeasurementsForPage(currentPageNum);
       saveAutosave();
-      // Without this, the click that ends the gesture would fall through to
-      // selecting whatever's under it (and could deselect this tracing).
-      suppressNextClick = true;
     }
+    // Without this, the click that ends the gesture would fall through to
+    // selecting whatever's under it — and a point sits right on the
+    // outline, so that could deselect the tracing (breaking a double-click
+    // to remove it).
+    suppressNextClick = true;
     vertexDragState = null;
     return;
   }
