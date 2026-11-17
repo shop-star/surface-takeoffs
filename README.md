@@ -110,6 +110,12 @@ resolution (e.g. a 300 DPI scan). The app tells you when it doesn't.
    totalled separately (only
    shown when you actually have one of that kind). Use **Copy results**
    to paste a tab-separated list into Excel or your quote.
+
+   Keyboard shortcuts (not while typing in a box):
+   - **Ctrl+Z** (**⌘Z** on a Mac): while tracing, undo the last point;
+     otherwise, bring back the last tracing you deleted (repeat to bring
+     back earlier ones).
+   - **Delete** (or **Backspace**): delete the selected tracing.
 6. The **Download** section is always there, no button to open it first —
    pick which pages to include (just the current page, the whole
    document, or only the pages with a tracing on them) and whether to
