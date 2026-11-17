@@ -157,6 +157,7 @@ const resultsCountBadge = document.getElementById("resultsCountBadge");
 const canvasScroller = document.getElementById("canvasScroller");
 const pdfCanvas = document.getElementById("pdfCanvas");
 const overlayCanvas = document.getElementById("overlayCanvas");
+const canvasHint = document.getElementById("canvasHint");
 const pdfCtx = pdfCanvas.getContext("2d");
 const overlayCtx = overlayCanvas.getContext("2d");
 
@@ -660,6 +661,7 @@ function openPdfFromBytes(fileName, bytes, opts) {
           currentPageNum = 1;
           pageGeometry = {};
           tracings = [];
+          deletedTracings = [];
           nextTracingId = 1;
           renderScale = 1.5;
           resetToolState();
@@ -731,6 +733,7 @@ function applyRestoredGeometry(geometry, nextId) {
   pageGeometry = geometry || {};
   nextTracingId = nextId || 1;
   tracings = [];
+  deletedTracings = [];
   editingTracing = null;
   vertexDragState = null;
   Object.keys(pageGeometry).forEach((pageNumKey) => {
@@ -915,6 +918,9 @@ function toCanvas([x, y]) {
 
 function redrawOverlay() {
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  // Whatever the hover hint described may have just changed (point removed,
+  // tracing deselected...) — the next mouse move brings it back if needed.
+  canvasHint.hidden = true;
   const geo = currentGeometry();
 
   // A scale entered directly as a ratio (see scaleRatioConfirmBtn) has no
@@ -1369,7 +1375,7 @@ overlayCanvas.addEventListener("click", (evt) => {
     redrawOverlay();
     setStatus(
       hit
-        ? `Editing "${hit.name}" — drag its point handles to reshape it, click a + between two points to add a new point there, double-click (or right-click) a point to remove it, or drag the circle on its label to move it.`
+        ? `Editing "${hit.name}" — drag its point handles to reshape it, click a + between two points to add a new point there, double-click (or right-click) a point to remove it, or drag the circle on its label to move it. Press Delete to delete it.`
         : ""
     );
   }
@@ -1406,6 +1412,47 @@ function editingTracingObject() {
   if (mode !== "idle" || !editingTracing) return null;
   return currentGeometry().tracings.find((t) => t.id === editingTracing) || null;
 }
+
+// Hovering one of a selected tracing's handles shows what it does next to
+// the cursor (and a matching cursor), so adding/removing points and moving
+// the label can be discovered without reading the status bar.
+function updateCanvasHint(evt) {
+  const tracing =
+    !vertexDragState && !labelDragState && !(panState && panState.dragged) ? editingTracingObject() : null;
+  let hint = "";
+  let cursor = "";
+  if (tracing) {
+    const p = canvasPointFromEvent(evt);
+    if (hitTestLabel(tracing, p)) {
+      hint = "Drag to move the label";
+      cursor = "move";
+    } else if (hitTestVertex(tracing, p) !== -1) {
+      hint = "Drag to move · Right-click or double-click to remove";
+      cursor = "move";
+    } else if (hitTestMidpoint(tracing, p) !== -1) {
+      hint = "Click to add a point here";
+      cursor = "copy";
+    }
+  }
+  if (!(panState && panState.dragged)) overlayCanvas.style.cursor = cursor;
+  if (!hint) {
+    canvasHint.hidden = true;
+    return;
+  }
+  const rect = overlayCanvas.getBoundingClientRect();
+  canvasHint.textContent = hint;
+  canvasHint.hidden = false;
+  // Flip to the cursor's left near the viewer's right edge, so it stays
+  // in view.
+  const roomRight = canvasScroller.getBoundingClientRect().right - evt.clientX;
+  const x = roomRight < canvasHint.offsetWidth + 24 ? evt.clientX - rect.left - canvasHint.offsetWidth - 10 : evt.clientX - rect.left + 14;
+  canvasHint.style.left = `${x}px`;
+  canvasHint.style.top = `${evt.clientY - rect.top + 16}px`;
+}
+overlayCanvas.addEventListener("mousemove", updateCanvasHint);
+overlayCanvas.addEventListener("mouseleave", () => {
+  canvasHint.hidden = true;
+});
 
 // Right-clicking a selected tracing's point removes it (instead of the
 // browser's menu). Anywhere else, the normal menu still appears.
@@ -2101,16 +2148,96 @@ function startRowDrag(evt, tr, id) {
   window.addEventListener("pointercancel", onEnd);
 }
 
+// Deleted tracings, most recent last, so Ctrl/Cmd+Z can put them back
+// exactly where they were (list position and page). Cleared whenever the
+// whole set of tracings is replaced (new file, restore, Clear all).
+let deletedTracings = [];
+
 function removeTracing(id) {
+  const listIndex = tracings.findIndex((t) => t.id === id);
+  if (listIndex === -1) return;
+  const flat = tracings[listIndex];
+  const geo = pageGeometry[flat.page];
+  const geoIndex = geo ? geo.tracings.findIndex((t) => t.id === id) : -1;
+  deletedTracings.push({ flat, listIndex, geoTracing: geoIndex === -1 ? null : geo.tracings[geoIndex], geoIndex });
+
   tracings = tracings.filter((t) => t.id !== id);
-  Object.values(pageGeometry).forEach((geo) => {
-    geo.tracings = geo.tracings.filter((t) => t.id !== id);
+  Object.values(pageGeometry).forEach((g) => {
+    g.tracings = g.tracings.filter((t) => t.id !== id);
   });
   if (editingTracing === id) editingTracing = null;
   redrawOverlay();
   updateResultsTable();
   saveAutosave();
+  setStatus(`Deleted "${flat.name}" — press ${UNDO_KEYS} to undo.`);
 }
+
+function restoreLastDeletedTracing() {
+  const entry = deletedTracings.pop();
+  if (!entry) return false;
+  const { flat, listIndex, geoTracing, geoIndex } = entry;
+  tracings.splice(Math.min(listIndex, tracings.length), 0, flat);
+  if (geoTracing) {
+    if (!pageGeometry[flat.page]) pageGeometry[flat.page] = { calibration: null, tracings: [] };
+    const geo = pageGeometry[flat.page];
+    geo.tracings.splice(Math.min(geoIndex, geo.tracings.length), 0, geoTracing);
+  }
+  syncTracingOrder();
+  recalcAllMeasurementsForPage(flat.page);
+  redrawOverlay();
+  updateResultsTable();
+  saveAutosave();
+  setStatus(
+    flat.page === currentPageNum
+      ? `Restored "${flat.name}".`
+      : `Restored "${flat.name}" (on page ${flat.page}).`
+  );
+  return true;
+}
+
+// ---- Keyboard shortcuts ----------------------------------------------------
+//  Ctrl/Cmd+Z: while tracing, undo the last point; otherwise bring back the
+//              most recently deleted tracing.
+//  Delete / Backspace: delete the selected tracing.
+// Left alone while typing in a text box, so those keys still edit the text.
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const UNDO_KEYS = IS_MAC ? "⌘Z" : "Ctrl+Z";
+
+undoPointBtn.title = `Undo point (${UNDO_KEYS})`;
+
+function isTypingTarget(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
+  if (el.tagName !== "INPUT") return false;
+  return !["button", "checkbox", "radio", "color", "range", "file", "submit", "reset"].includes(el.type);
+}
+
+document.addEventListener("keydown", (evt) => {
+  if (isTypingTarget(evt.target)) return;
+
+  const isUndo =
+    (evt.ctrlKey || evt.metaKey) && !evt.shiftKey && !evt.altKey && evt.key.toLowerCase() === "z";
+  if (isUndo) {
+    if (mode === "trace") {
+      evt.preventDefault();
+      if (traceTemp.points.length > 0) undoPointBtn.click();
+      return;
+    }
+    if (mode === "idle" && deletedTracings.length > 0) {
+      evt.preventDefault();
+      restoreLastDeletedTracing();
+    }
+    return;
+  }
+
+  if ((evt.key === "Delete" || evt.key === "Backspace") && !evt.ctrlKey && !evt.metaKey && !evt.altKey) {
+    if (mode === "idle" && editingTracing) {
+      evt.preventDefault();
+      removeTracing(editingTracing);
+    }
+  }
+});
 
 // Kept in sync on both the flat `tracings` list (what the results table's
 // swatch reflects) and the per-page geometry (what drawing/export reads) —
@@ -2182,6 +2309,7 @@ function showCopyFallback(text) {
 
 clearAllBtn.addEventListener("click", () => {
   tracings = [];
+  deletedTracings = [];
   nextTracingId = 1;
   pageGeometry = {};
   resetToolState();

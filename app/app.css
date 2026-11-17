@@ -331,6 +331,18 @@ button.primary:hover:not(:disabled), a.btn.primary:hover { background: var(--bra
   display: block;
 }
 #overlayCanvas { cursor: crosshair; }
+.canvas-hint {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(32, 32, 32, 0.85);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.canvas-hint[hidden] { display: none; }
 
 .inline-form {
   margin-top: 10px;
