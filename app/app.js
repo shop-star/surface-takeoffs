@@ -1457,7 +1457,6 @@ setScaleBtn.addEventListener("click", () => {
 
 traceBtn.addEventListener("click", () => {
   resetToolState();
-  setResultsPaneOpen(false);
   mode = "trace";
   traceTemp = { page: currentPageNum, points: [] };
   undoPointBtn.hidden = false;
@@ -1608,26 +1607,44 @@ function addTracing(kind) {
   resetToolState();
   redrawOverlay();
   updateResultsTable();
-  setResultsPaneOpen(true);
+  setResultsPaneOpen(true, { pinned: false });
   saveAutosave();
   setStatus(`Added ${measurementText} — type a name for it in the results pane, then press Enter.`);
   focusTracingName(id);
 }
 
-// The results pane sits minimised as a slim strip on the right so the plan
-// viewer gets the width; it opens itself when a tracing is finished and
-// minimises again when the next trace starts.
-function setResultsPaneOpen(open) {
+// The results pane sits minimised as a slim strip on the right and slides
+// out over the plan. Two ways it opens:
+//  - by itself when a tracing is finished: it slides away again on the next
+//    click anywhere outside it;
+//  - from a click on the strip ("pinned"): it stays open until "Hide".
+// Clicking the strip while it's open by itself pins it.
+let resultsPanePinned = false;
+function setResultsPaneOpen(open, { pinned = false } = {}) {
+  resultsPanePinned = open && pinned;
   mainLayoutEl.classList.toggle("results-collapsed", !open);
 }
+function resultsPaneIsOpen() {
+  return !resultsPaneEl.hidden && !mainLayoutEl.classList.contains("results-collapsed");
+}
 resultsExpandBtn.addEventListener("click", () => {
-  setResultsPaneOpen(true);
+  setResultsPaneOpen(true, { pinned: true });
   resultsCollapseBtn.focus();
 });
 resultsCollapseBtn.addEventListener("click", () => {
   setResultsPaneOpen(false);
   resultsExpandBtn.focus();
 });
+// Capture phase, so it sees the click even if something else stops it.
+document.addEventListener(
+  "pointerdown",
+  (evt) => {
+    if (!resultsPaneIsOpen() || resultsPanePinned) return;
+    if (resultsPaneEl.contains(evt.target)) return;
+    setResultsPaneOpen(false);
+  },
+  true
+);
 
 // A new tracing goes after the last one on its page (or any earlier page),
 // so by default the list stays grouped by page — dragging can then put it
