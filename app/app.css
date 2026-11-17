@@ -445,8 +445,3 @@ button.primary:hover:not(:disabled), a.btn.primary:hover { background: var(--bra
 
 .results-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .copy-fallback { width: 100%; height: 60px; margin-top: 8px; font-size: 12px; }
-
-@media (max-width: 480px) {
-  body { padding: 12px; }
-  #mainLayout .canvas-scroller { height: 50vh; }
-}
