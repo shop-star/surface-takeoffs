@@ -98,7 +98,12 @@ function paletteColor(index) {
 // ---- State -----------------------------------------------------------
 let currentPdf = null;
 let currentPageNum = 1;
+// renderScale is the zoom the viewer shows (CSS px per PDF unit) — what
+// clicks and hit-testing are measured against. drawnScale is the zoom the
+// canvases' pixels were last actually drawn at; mid-zoom the two differ and
+// the canvases are just stretched (see zoomTo) until the sharp redraw lands.
 let renderScale = 1.5;
+let drawnScale = 1.5;
 let currentFileName = null;
 // Kept separately from whatever pdf.js does with its own copy of the bytes
 // (getDocument() can transfer/detach the buffer it's given) so the download
@@ -157,6 +162,7 @@ const resultsCountBadge = document.getElementById("resultsCountBadge");
 const canvasScroller = document.getElementById("canvasScroller");
 const pdfCanvas = document.getElementById("pdfCanvas");
 const overlayCanvas = document.getElementById("overlayCanvas");
+const canvasStack = document.getElementById("canvasStack");
 const canvasHint = document.getElementById("canvasHint");
 const pdfCtx = pdfCanvas.getContext("2d");
 const overlayCtx = overlayCanvas.getContext("2d");
@@ -838,38 +844,85 @@ function clearAutosave() {
 }
 
 // ---- Rendering --------------------------------------------------------
-// A mouse-wheel zoom gesture fires many events in quick succession, each
-// calling renderPage() — pdf.js refuses to start a render() on a canvas
-// that still has one in flight ("Cannot use the same canvas during
-// multiple render() operations"), so the previous render task is
-// cancelled first. A cancelled render's promise rejects with
-// RenderingCancelledException, which is expected/harmless here, not a
-// real error to report.
+// Zooming used to resize the canvases (which blanks them) and re-render the
+// whole page through pdf.js on every wheel event — dozens a second on a
+// trackpad, most cancelled half-way — which flickered and stuttered,
+// worst on slower machines. Now:
+//  - zooming only changes the canvases' on-screen (CSS) size, which the
+//    browser scales instantly, so the plan follows the wheel smoothly;
+//  - once the wheel has been still for a moment, the page is rendered once
+//    at the new zoom into an off-screen canvas and swapped in when done, so
+//    the plan never goes blank while it renders.
+// pdf.js refuses two renders on one canvas at once, so an in-flight render
+// is cancelled before the next starts; its RenderingCancelledException is
+// expected, not an error to report.
 let currentRenderTask = null;
+let renderToken = 0;
+let pageBaseSize = null; // the current page's size at zoom 1, in PDF units
+let drawnPageKey = null; // which document/page the canvases currently show
 
-// onResized, if given, runs right after the canvas is resized to the new
-// scale but before the (async) redraw — used by wheel-zoom to restore the
-// scroll position so the point under the cursor stays put.
+// Sizes the viewer's canvases on screen for renderScale, whatever
+// resolution their pixels were drawn at.
+function applyDisplaySize() {
+  if (!pageBaseSize) return;
+  const w = `${pageBaseSize.w * renderScale}px`;
+  const h = `${pageBaseSize.h * renderScale}px`;
+  pdfCanvas.style.width = overlayCanvas.style.width = canvasStack.style.width = w;
+  pdfCanvas.style.height = overlayCanvas.style.height = canvasStack.style.height = h;
+}
+
+// onResized, if given, runs once the canvases have their new on-screen size
+// but before the (async) page render — used to set the scroll position.
 function renderPage(onResized) {
   if (!currentPdf) return;
-  currentPdf.getPage(currentPageNum).then((page) => {
-    const viewport = page.getViewport({ scale: renderScale });
-    pdfCanvas.width = overlayCanvas.width = Math.ceil(viewport.width);
-    pdfCanvas.height = overlayCanvas.height = Math.ceil(viewport.height);
+  const pdf = currentPdf;
+  const pageNum = currentPageNum;
+  const scale = renderScale;
+  const token = ++renderToken;
+  clearTimeout(zoomRenderTimer);
+  pdf.getPage(pageNum).then((page) => {
+    if (token !== renderToken) return;
+    const base = page.getViewport({ scale: 1 });
+    pageBaseSize = { w: base.width, h: base.height };
+    const viewport = page.getViewport({ scale });
+    const width = Math.ceil(viewport.width);
+    const height = Math.ceil(viewport.height);
 
+    // A different page (or file): nothing on screen is worth keeping, so
+    // size the canvases straight away and let the page draw in.
+    const pageKey = { pdf, pageNum };
+    const samePage = drawnPageKey && drawnPageKey.pdf === pdf && drawnPageKey.pageNum === pageNum;
+    if (!samePage) {
+      pdfCanvas.width = overlayCanvas.width = width;
+      pdfCanvas.height = overlayCanvas.height = height;
+      drawnScale = scale;
+      drawnPageKey = pageKey;
+      redrawOverlay();
+    }
+    applyDisplaySize();
     if (onResized) onResized();
 
-    if (currentRenderTask) {
-      currentRenderTask.cancel();
-    }
-    currentRenderTask = page.render({ canvasContext: pdfCtx, viewport });
-    currentRenderTask.promise.then(
+    if (currentRenderTask) currentRenderTask.cancel();
+    const offscreen = document.createElement("canvas");
+    offscreen.width = width;
+    offscreen.height = height;
+    const task = page.render({ canvasContext: offscreen.getContext("2d"), viewport });
+    currentRenderTask = task;
+    task.promise.then(
       () => {
-        currentRenderTask = null;
+        if (currentRenderTask === task) currentRenderTask = null;
+        if (token !== renderToken) return;
+        if (pdfCanvas.width !== width || pdfCanvas.height !== height) {
+          pdfCanvas.width = overlayCanvas.width = width;
+          pdfCanvas.height = overlayCanvas.height = height;
+        }
+        pdfCtx.drawImage(offscreen, 0, 0);
+        drawnScale = scale;
+        drawnPageKey = pageKey;
         redrawOverlay();
       },
       (err) => {
-        currentRenderTask = null;
+        if (currentRenderTask === task) currentRenderTask = null;
         if (err && err.name === "RenderingCancelledException") return;
         if (isBenignRenderRace(describeError(err))) return;
         setStatus("Couldn't render this page — " + describeError(err), true);
@@ -882,6 +935,36 @@ function renderPage(onResized) {
     prevPageBtn.disabled = currentPageNum <= 1;
     nextPageBtn.disabled = currentPageNum >= currentPdf.numPages;
   });
+}
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4;
+// How long the wheel must be still before the sharp re-render.
+const ZOOM_SETTLE_MS = 150;
+let zoomRenderTimer = null;
+
+// Zooms to newScale keeping the plan point under (clientX, clientY) — the
+// middle of the viewer if not given — in place. Instant: only the on-screen
+// size changes now; the sharp render follows once zooming pauses.
+function zoomTo(newScale, clientX, clientY) {
+  if (!currentPdf || !pageBaseSize) return;
+  newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newScale));
+  if (Math.abs(newScale - renderScale) < 1e-6) return;
+  const rect = canvasScroller.getBoundingClientRect();
+  const offsetX = (clientX === undefined ? rect.left + rect.width / 2 : clientX) - rect.left - canvasScroller.clientLeft;
+  const offsetY = (clientY === undefined ? rect.top + rect.height / 2 : clientY) - rect.top - canvasScroller.clientTop;
+  const pdfX = (canvasScroller.scrollLeft + offsetX) / renderScale;
+  const pdfY = (canvasScroller.scrollTop + offsetY) / renderScale;
+
+  renderScale = newScale;
+  applyDisplaySize();
+  canvasScroller.scrollLeft = pdfX * renderScale - offsetX;
+  canvasScroller.scrollTop = pdfY * renderScale - offsetY;
+  zoomIndicatorEl.textContent = `${Math.round((renderScale / 1.5) * 100)}%`;
+  canvasHint.hidden = true;
+
+  clearTimeout(zoomRenderTimer);
+  zoomRenderTimer = setTimeout(() => renderPage(), ZOOM_SETTLE_MS);
 }
 
 // Populated once per opened file (numPages is fixed for that file) so
@@ -912,8 +995,10 @@ function currentGeometry() {
   return pageGeometry[currentPageNum];
 }
 
+// Page units to overlay-canvas pixels (drawnScale: the canvas's pixels may
+// be at a different zoom from what's on screen mid-zoom).
 function toCanvas([x, y]) {
-  return [x * renderScale, y * renderScale];
+  return [x * drawnScale, y * drawnScale];
 }
 
 function redrawOverlay() {
@@ -1586,20 +1671,16 @@ canvasScroller.addEventListener(
   (evt) => {
     if (!currentPdf) return;
     evt.preventDefault();
-    const rect = canvasScroller.getBoundingClientRect();
-    const offsetX = evt.clientX - rect.left;
-    const offsetY = evt.clientY - rect.top;
-    const pdfX = (canvasScroller.scrollLeft + offsetX) / renderScale;
-    const pdfY = (canvasScroller.scrollTop + offsetY) / renderScale;
-
-    const oldScale = renderScale;
-    renderScale = evt.deltaY < 0 ? Math.min(4, renderScale * 1.1) : Math.max(0.5, renderScale / 1.1);
-    if (renderScale === oldScale) return;
-
-    renderPage(() => {
-      canvasScroller.scrollLeft = pdfX * renderScale - offsetX;
-      canvasScroller.scrollTop = pdfY * renderScale - offsetY;
-    });
+    // Zoom by how far the wheel/trackpad actually moved, not a fixed step
+    // per event: a mouse notch (~100px) is about 16%, and a trackpad's
+    // stream of small deltas zooms smoothly instead of lurching. A trackpad
+    // pinch arrives as ctrl+wheel with much smaller deltas, so it's scaled up.
+    let delta = evt.deltaY;
+    if (evt.deltaMode === 1) delta *= 16; // lines
+    else if (evt.deltaMode === 2) delta *= 400; // pages
+    delta = Math.max(-150, Math.min(150, delta));
+    const sensitivity = evt.ctrlKey ? 0.01 : 0.0015;
+    zoomTo(renderScale * Math.exp(-delta * sensitivity), evt.clientX, evt.clientY);
   },
   { passive: false }
 );
@@ -1952,14 +2033,9 @@ nextPageBtn.addEventListener("click", () => {
     renderPage();
   }
 });
-zoomInBtn.addEventListener("click", () => {
-  renderScale = Math.min(4, renderScale * 1.25);
-  renderPage();
-});
-zoomOutBtn.addEventListener("click", () => {
-  renderScale = Math.max(0.5, renderScale / 1.25);
-  renderPage();
-});
+// The buttons zoom around the middle of the viewer.
+zoomInBtn.addEventListener("click", () => zoomTo(renderScale * 1.25));
+zoomOutBtn.addEventListener("click", () => zoomTo(renderScale / 1.25));
 
 // Clicking a tracing's row (see updateResultsTable) jumps the viewer to
 // that tracing's page and selects it, same as clicking its outline on the
