@@ -149,6 +149,10 @@ const viewControlsEl = document.getElementById("viewControls");
 const toolsSectionEl = document.getElementById("toolsSection");
 const viewerSectionEl = document.getElementById("viewerSection");
 const resultsPaneEl = document.getElementById("resultsPane");
+const mainLayoutEl = document.getElementById("mainLayout");
+const resultsExpandBtn = document.getElementById("resultsExpandBtn");
+const resultsCollapseBtn = document.getElementById("resultsCollapseBtn");
+const resultsCountBadge = document.getElementById("resultsCountBadge");
 
 const canvasScroller = document.getElementById("canvasScroller");
 const pdfCanvas = document.getElementById("pdfCanvas");
@@ -1453,6 +1457,7 @@ setScaleBtn.addEventListener("click", () => {
 
 traceBtn.addEventListener("click", () => {
   resetToolState();
+  setResultsPaneOpen(false);
   mode = "trace";
   traceTemp = { page: currentPageNum, points: [] };
   undoPointBtn.hidden = false;
@@ -1603,10 +1608,26 @@ function addTracing(kind) {
   resetToolState();
   redrawOverlay();
   updateResultsTable();
+  setResultsPaneOpen(true);
   saveAutosave();
   setStatus(`Added ${measurementText} — type a name for it in the results pane, then press Enter.`);
   focusTracingName(id);
 }
+
+// The results pane sits minimised as a slim strip on the right so the plan
+// viewer gets the width; it opens itself when a tracing is finished and
+// minimises again when the next trace starts.
+function setResultsPaneOpen(open) {
+  mainLayoutEl.classList.toggle("results-collapsed", !open);
+}
+resultsExpandBtn.addEventListener("click", () => {
+  setResultsPaneOpen(true);
+  resultsCollapseBtn.focus();
+});
+resultsCollapseBtn.addEventListener("click", () => {
+  setResultsPaneOpen(false);
+  resultsExpandBtn.focus();
+});
 
 // A new tracing goes after the last one on its page (or any earlier page),
 // so by default the list stays grouped by page — dragging can then put it
@@ -1786,6 +1807,7 @@ function goToTracing(id, pageNum) {
 
 // ---- 3. Results table ----------------------------------------------------
 function updateResultsTable() {
+  resultsCountBadge.textContent = String(tracings.length);
   resultsBody.innerHTML = "";
   let totalAreaM2 = 0;
   let totalLengthM = 0;

@@ -24,7 +24,7 @@
 
   <section id="statusBar" class="status-bar" role="status" aria-live="polite"></section>
 
-  <div id="mainLayout">
+  <div id="mainLayout" class="results-collapsed">
   <section id="intakeSection" class="panel">
     <h2>1. Open a plan</h2>
     <div id="dropZone" class="drop-zone">
@@ -168,8 +168,18 @@
     <button id="downloadConfirmBtn" class="primary">Download</button>
   </section>
 
-  <section id="resultsPane" class="panel" hidden>
-    <h2>Takeoff results</h2>
+  <section id="resultsPane" class="panel results-pane" hidden>
+    <!-- Shown only while the pane is minimised: a slim strip down the right
+         that opens the pane again. -->
+    <button id="resultsExpandBtn" type="button" class="results-expand-btn" title="Show takeoff results">
+      <span aria-hidden="true">◀</span>
+      <span class="results-expand-label">Takeoff results <span id="resultsCountBadge" class="results-count-badge">0</span></span>
+    </button>
+    <div id="resultsContent" class="results-content">
+    <div class="results-header">
+      <h2>Takeoff results</h2>
+      <button id="resultsCollapseBtn" type="button" class="results-collapse-btn" title="Minimise the results pane">Hide ▶</button>
+    </div>
     <table id="resultsTable" class="results-table">
       <thead>
         <tr>
@@ -200,6 +210,7 @@
       <button id="clearAllBtn">Clear all</button>
     </div>
     <textarea id="copyFallback" class="copy-fallback" hidden></textarea>
+    </div>
   </section>
   </div>
 
