@@ -90,7 +90,9 @@ resolution (e.g. a 300 DPI scan). The app tells you when it doesn't.
    to set the scale once per page). To fix up a tracing afterward, click
    its outline/line (when you're not actively tracing or setting scale) to
    select it, then drag its point handles to reshape it — its measurement
-   updates as you drag — or drag the circle on its label to reposition the
+   updates as you drag. To add a point, click (or drag) one of the small
+   **+** handles halfway along each side; to remove one, double-click (or
+   right-click) it. Or drag the circle on its label to reposition the
    label itself (even away from the tracing, which draws a thin line back
    to it so it's still clearly that tracing's label). Both a tracing's
    drawing on the plan and its label always show its measurement (e.g.
