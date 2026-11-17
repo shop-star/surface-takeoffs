@@ -28,11 +28,15 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
    Three columns: the numbered sections narrowed into their own column on
    the left, the PDF viewer (unnumbered — just the plan itself; its
    controls live in section 3) filling the middle, and the results pane
-   on the right. (There used to be a "Stacked" option that put the
+   on the right. The results pane starts minimised to a slim strip so the
+   viewer gets the room; it opens when a tracing is finished (or when the
+   strip is clicked) and minimises again when a new trace starts.
+   (There used to be a "Stacked" option that put the
    sections and viewer in one column; it was removed.) */
 :root {
   --results-width: 440px;
   --sections-width: 260px;
+  --results-collapsed-width: 40px;
 }
 @media (max-width: 1200px) {
   :root {
@@ -43,6 +47,7 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
 #mainLayout {
   display: grid;
   grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-width);
+  transition: grid-template-columns 0.2s ease;
   /* The trailing 1fr row soaks up any extra height from the items that
      span every row (the viewer and results pane), instead of it being
      shared out as gaps between the sections. */
@@ -60,6 +65,63 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
    (very long scale labels, say), it scrolls inside the pane rather than
    hanging off the right of the screen. */
 #resultsPane { min-width: 0; overflow-x: auto; }
+/* In the column layout the viewer runs down to the bottom of the window
+   rather than stopping at 60% of its height. */
+#mainLayout .canvas-scroller { height: calc(100vh - 120px); }
+#mainLayout.results-collapsed {
+  grid-template-columns: var(--sections-width) minmax(0, 1fr) var(--results-collapsed-width);
+}
+
+/* Minimise / restore for the results pane. */
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.results-header h2 { margin: 0; }
+.results-collapse-btn { padding: 3px 8px; font-size: 12px; }
+.results-expand-btn { display: none; }
+#mainLayout.results-collapsed #resultsPane {
+  padding: 0;
+  overflow: hidden;
+  align-self: stretch;
+}
+#mainLayout.results-collapsed .results-content { display: none; }
+#mainLayout.results-collapsed .results-expand-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  padding: 10px 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-muted);
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+#mainLayout.results-collapsed .results-expand-btn:hover { background: #e6eeec; }
+.results-expand-label {
+  writing-mode: vertical-rl;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.results-count-badge {
+  writing-mode: horizontal-tb;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
 
 /* Page navigation and zoom sit in section 1, under the open file's name. */
 .view-controls { margin: 10px 0 0; }
@@ -79,6 +141,7 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
   #mainLayout {
     display: block;
   }
+  #mainLayout .canvas-scroller { height: 60vh; }
   #mainLayout #intakeSection,
   #mainLayout #scaleSection,
   #mainLayout #toolsSection,
@@ -88,6 +151,13 @@ h2 { font-size: 14px; margin: 0 0 8px; color: var(--brand-dark); }
     grid-column: auto;
     grid-row: auto;
   }
+  #mainLayout.results-collapsed .results-expand-btn {
+    flex-direction: row;
+    justify-content: center;
+    min-height: 0;
+  }
+  #mainLayout.results-collapsed .results-expand-btn > span:first-child { transform: rotate(-90deg); }
+  .results-expand-label { writing-mode: horizontal-tb; }
 }
 
 .panel {
@@ -375,8 +445,3 @@ button.primary:hover:not(:disabled), a.btn.primary:hover { background: var(--bra
 
 .results-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .copy-fallback { width: 100%; height: 60px; margin-top: 8px; font-size: 12px; }
-
-@media (max-width: 480px) {
-  body { padding: 12px; }
-  .canvas-scroller { height: 50vh; }
-}
